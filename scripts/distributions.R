@@ -8,6 +8,9 @@ beta_to_ab <- function(mu, phi) {
   if (!is.finite(mu) || !is.finite(phi) || mu <= 0 || mu >= 1 || phi <= 0)
     stop("Invalid beta parameters")
   
+  mu <- unname(mu)
+  phi <- unname(phi)
+  
   alpha <- mu * phi
   beta <- (1 - mu) * phi
   
@@ -21,8 +24,12 @@ beta_from_ab <- function(alpha, beta) {
   if (!is.finite(alpha) || !is.finite(beta) || alpha <= 0 || beta <= 0)
     stop("Invalid beta shape parameters")
   
-  phi <- alpha + beta
+  alpha <- unname(alpha)
+  beta <- unname(beta)
+  
   mu <- alpha / phi
+  phi <- alpha + beta
+  
   
   c(mu = mu, phi = phi)
 }
@@ -83,6 +90,9 @@ kumar_to_pq <- function(omega, dp) {
   
   if (!is.finite(omega) || !is.finite(dp) || omega <= 0 || omega >= 1 || dp <= 0)
     stop("Invalid Kumaraswamy parameters")
+  
+  omega <- unname(omega)
+  dp <- unname(dp)
   
   p <- 1 / dp
   q <- log(0.5) / log1p(-omega^(1 / dp))
