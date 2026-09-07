@@ -90,3 +90,146 @@ fit_beta <- function(x, start_mu = NULL, start_phi = NULL,
     optim = opt
   )
 }
+
+
+
+# ============================================================
+# Kumaraswamy maximum likelihood estimation
+# ============================================================
+
+# loglik_kumar <- function(p, q, x) {
+#   
+#   if (any(!is.finite(x)) || any(x <= 0) || any(x >= 1))
+#     stop("All observations must be finite and lie strictly inside (0, 1)")
+#   
+#   if (!is.finite(p) || !is.finite(q) || p <= 0 || q <= 0)
+#     return(-Inf)
+#   
+#   sum(extraDistr::dkumar(x = x, a = p, b = q, log = TRUE))
+# }
+
+# ============================================================
+# Numerically stable log(1 - exp(a)), for a <= 0
+# ============================================================
+
+log1mexp <- function(a) {
+  
+  out <- numeric(length(a))
+  
+  idx <- a < log(0.5)
+  
+  out[idx] <- log1p(-exp(a[idx]))
+  out[!idx] <- log(-expm1(a[!idx]))
+  
+  out
+}
+
+
+# ============================================================
+# Kumaraswamy log-likelihood
+# ============================================================
+
+loglik_kumar <- function(p, q, x) {
+  
+  if (any(!is.finite(x)) || any(x <= 0) || any(x >= 1))
+    stop("All observations must be finite and lie strictly inside (0, 1)")
+  
+  if (!is.finite(p) || !is.finite(q) || p <= 0 || q <= 0)
+    return(-Inf)
+  
+  log_x <- log(x)
+  
+  a <- p * log_x
+  
+  log_one_minus_xp <- log1mexp(a)
+  
+  ll <- length(x) * (log(p) + log(q)) +
+    (p - 1) * sum(log_x) +
+    (q - 1) * sum(log_one_minus_xp)
+  
+  if (!is.finite(ll))
+    return(-Inf)
+  
+  ll
+}
+
+kumar_start_pq <- function(x) {
+  
+  m <- mean(x)
+  v <- var(x)
+  
+  f <- function(par) {
+    p <- exp(par[1])
+    q <- exp(par[2])
+    
+    mu <- q * beta(1 + 1/p, q)
+    mu2 <- q * beta(1 + 2/p, q)
+    
+    (mu - m)^2 + (mu2 - mu^2 - v)^2
+  }
+  
+  o <- optim(log(c(1, 1)), 
+             f,
+             method = "L-BFGS-B",
+             lower = log(c(0.01, 0.01)),
+             upper = log(c(100, 100)))
+  
+  c(p = exp(o$par[1]), q = exp(o$par[2]))
+}
+
+
+fit_kumar <- function(x, start_p = NULL, start_q = NULL,
+                      method = "BFGS", maxit = 1000) {
+  
+  if (is.null(start_p) || is.null(start_q)) {
+    start <- kumar_start_pq(x)
+    if (is.null(start_p)) start_p <- unname(start["p"])
+    if (is.null(start_q)) start_q <- unname(start["q"])
+  }
+  
+  
+  # ----------------------------------------------------------
+  # Negative log-likelihood in unconstrained parameters
+  # ----------------------------------------------------------
+  
+  objective <- function(par) {
+    
+    p <- exp(par["log_p"])
+    q <- exp(par["log_q"])
+    
+    ll <- loglik_kumar(p = p, q = q, x = x)
+    
+    -ll
+  }
+  
+  
+  # ----------------------------------------------------------
+  # Maximum likelihood estimation
+  # ----------------------------------------------------------
+  
+  opt <- optim(
+    par = c(log_p = log(start_p), log_q = log(start_q)),
+    fn = objective,
+    method = method,
+    control = list(maxit = maxit))
+  
+  
+  # ----------------------------------------------------------
+  # Estimates
+  # ----------------------------------------------------------
+  
+  omega_dp_hat <- kumar_from_pq(p = exp(opt$par["log_p"]), q = exp(opt$par["log_q"]))
+  
+  list(
+    omega = omega_dp_hat["omega"],
+    dp = omega_dp_hat["dp"],
+    p = unname(exp(opt$par["log_p"])),
+    q = unname(exp(opt$par["log_q"])),
+    start_p = start_p,
+    start_q = start_q,
+    logLik = -opt$value,
+    convergence = opt$convergence,
+    counts = opt$counts,
+    optim = opt
+  )
+}
