@@ -116,33 +116,33 @@ kumar_from_pq <- function(p, q) {
 }
 
 # Kumaraswamy density reparameterized by omega and dispersion
-d_kumar <- function(x, omega, dp, log = FALSE) {
-  
-  pars <- kumar_to_pq(omega = omega, dp = dp)
-  
-  p <- pars["p"]
-  q <- pars["q"]
-  
-  z <- p * log(x)
-  
-  log1mxp <- numeric(length(z))
-  idx <- z < log(0.5)
-  
-  log1mxp[idx] <- log1p(-exp(z[idx]))
-  log1mxp[!idx] <- log(-expm1(z[!idx]))
-  
-  log_density <- log(p) + log(q) +
-    (p - 1) * log(x) +
-    (q - 1) * log1mxp
-  
-  if (log) log_density else exp(log_density)
-}
+# d_kumar <- function(x, omega, dp, log = FALSE) {
+#   
+#   pars <- kumar_to_pq(omega = omega, dp = dp)
+#   
+#   p <- pars["p"]
+#   q <- pars["q"]
+#   
+#   z <- p * log(x)
+#   
+#   log1mxp <- numeric(length(z))
+#   idx <- z < log(0.5)
+#   
+#   log1mxp[idx] <- log1p(-exp(z[idx]))
+#   log1mxp[!idx] <- log(-expm1(z[!idx]))
+#   
+#   log_density <- log(p) + log(q) +
+#     (p - 1) * log(x) +
+#     (q - 1) * log1mxp
+#   
+#   if (log) log_density else exp(log_density)
+# }
 
 # Kumaraswamy density reparameterized by omega and dispersion
 d_kumar <- function(x, omega, dp, log = FALSE) {
-  
+
   pars <- kumar_to_pq(omega = omega, dp = dp)
-  
+
   extraDistr::dkumar(x, a = pars["p"], b = pars["q"], log = log)
 }
 
