@@ -80,9 +80,22 @@ r_beta <- function(n, mu, phi) {
 # Kumaraswamy distribution
 # ============================================================
 
-if (!requireNamespace("extraDistr", quietly = TRUE)) {
-  stop("Package 'extraDistr' must be installed.")
+# Numerically stable evaluation of log(1 - exp(a)), for a <= 0
+log1mexp <- function(a) {
+  
+  if (any(a > 0, na.rm = TRUE))
+    stop("All values of 'a' must be less than or equal to zero")
+  
+  out <- numeric(length(a))
+  
+  idx <- a < log(0.5)
+  
+  out[idx] <- log1p(-exp(a[idx]))
+  out[!idx] <- log(-expm1(a[!idx]))
+  
+  out
 }
+
 
 # Convert Kumaraswamy omega-dispersion parameters to shape parameters
 kumar_to_pq <- function(omega, dp) {
@@ -115,89 +128,6 @@ kumar_from_pq <- function(p, q) {
   c(omega = omega, dp = dp)
 }
 
-# Kumaraswamy density reparameterized by omega and dispersion
-# d_kumar <- function(x, omega, dp, log = FALSE) {
-#   
-#   pars <- kumar_to_pq(omega = omega, dp = dp)
-#   
-#   p <- pars["p"]
-#   q <- pars["q"]
-#   
-#   z <- p * log(x)
-#   
-#   log1mxp <- numeric(length(z))
-#   idx <- z < log(0.5)
-#   
-#   log1mxp[idx] <- log1p(-exp(z[idx]))
-#   log1mxp[!idx] <- log(-expm1(z[!idx]))
-#   
-#   log_density <- log(p) + log(q) +
-#     (p - 1) * log(x) +
-#     (q - 1) * log1mxp
-#   
-#   if (log) log_density else exp(log_density)
-# }
-
-# Kumaraswamy density reparameterized by omega and dispersion
-
-# ============================================================
-# Kumaraswamy distribution
-# ============================================================
-
-
-# Numerically stable evaluation of log(1 - exp(a)), for a <= 0
-log1mexp <- function(a) {
-  
-  if (any(a > 0, na.rm = TRUE))
-    stop("All values of 'a' must be less than or equal to zero")
-  
-  out <- numeric(length(a))
-  
-  idx <- a < log(0.5)
-  
-  out[idx] <- log1p(-exp(a[idx]))
-  out[!idx] <- log(-expm1(a[!idx]))
-  
-  out
-}
-
-
-# Convert Kumaraswamy omega-dispersion parameters to shape parameters
-kumar_to_pq <- function(omega, dp) {
-  
-  if (!is.finite(omega) || !is.finite(dp) ||
-      omega <= 0 || omega >= 1 || dp <= 0)
-    stop("Invalid Kumaraswamy parameters")
-  
-  omega <- unname(omega)
-  dp <- unname(dp)
-  
-  p <- 1 / dp
-  
-  q <- log(0.5) /
-    log1p(-omega^(1 / dp))
-  
-  c(p = p, q = q)
-}
-
-
-# Convert Kumaraswamy shape parameters to omega-dispersion parameters
-kumar_from_pq <- function(p, q) {
-  
-  if (!is.finite(p) || !is.finite(q) ||
-      p <= 0 || q <= 0)
-    stop("Invalid Kumaraswamy shape parameters")
-  
-  p <- unname(p)
-  q <- unname(q)
-  
-  dp <- 1 / p
-  
-  omega <- (-expm1(log(0.5) / q))^(1 / p)
-  
-  c(omega = omega, dp = dp)
-}
-
 
 # ============================================================
 # Kumaraswamy density
@@ -205,10 +135,7 @@ kumar_from_pq <- function(p, q) {
 
 d_kumar <- function(x, omega, dp, log = FALSE) {
   
-  pars <- kumar_to_pq(
-    omega = omega,
-    dp = dp
-  )
+  pars <- kumar_to_pq(omega = omega, dp = dp)
   
   shape_p <- unname(pars["p"])
   shape_q <- unname(pars["q"])
@@ -235,9 +162,7 @@ d_kumar <- function(x, omega, dp, log = FALSE) {
     
     log_x <- log(x[idx])
     
-    log_one_minus_xp <- log1mexp(
-      shape_p * log_x
-    )
+    log_one_minus_xp <- log1mexp(shape_p * log_x)
     
     log_density <-
       log(shape_p) +
@@ -305,14 +230,9 @@ d_kumar <- function(x, omega, dp, log = FALSE) {
 # Kumaraswamy CDF
 # ============================================================
 
-p_kumar <- function(q, omega, dp,
-                    lower.tail = TRUE,
-                    log.p = FALSE) {
+p_kumar <- function(q, omega, dp, lower.tail = TRUE, log.p = FALSE) {
   
-  pars <- kumar_to_pq(
-    omega = omega,
-    dp = dp
-  )
+  pars <- kumar_to_pq(omega = omega, dp = dp)
   
   shape_p <- unname(pars["p"])
   shape_q <- unname(pars["q"])
@@ -357,9 +277,7 @@ p_kumar <- function(q, omega, dp,
     log_x <- log(q[idx])
     
     # log{1 - x^p}
-    log_one_minus_xp <- log1mexp(
-      shape_p * log_x
-    )
+    log_one_minus_xp <- log1mexp(shape_p * log_x)
     
     # log survival probability:
     # log{1 - F(x)} = q * log{1 - x^p}
@@ -399,14 +317,9 @@ p_kumar <- function(q, omega, dp,
 # Kumaraswamy quantile function
 # ============================================================
 
-q_kumar <- function(p, omega, dp,
-                    lower.tail = TRUE,
-                    log.p = FALSE) {
+q_kumar <- function(p, omega, dp, lower.tail = TRUE, log.p = FALSE) {
   
-  pars <- kumar_to_pq(
-    omega = omega,
-    dp = dp
-  )
+  pars <- kumar_to_pq(omega = omega, dp = dp)
   
   shape_p <- unname(pars["p"])
   shape_q <- unname(pars["q"])
@@ -484,9 +397,7 @@ q_kumar <- function(p, omega, dp,
   
   log_inner <- log1mexp(a)
   
-  out[idx] <- exp(
-    log_inner / shape_p
-  )
+  out[idx] <- exp(log_inner / shape_p)
   
   out
 }
@@ -498,17 +409,10 @@ q_kumar <- function(p, omega, dp,
 
 r_kumar <- function(n, omega, dp) {
   
-  if (length(n) != 1L ||
-      !is.finite(n) ||
-      n <= 0 ||
-      n != as.integer(n))
+  if (length(n) != 1L || !is.finite(n) || n <= 0 || n != as.integer(n))
     stop("n must be a positive integer")
   
   u <- stats::runif(n)
   
-  q_kumar(
-    p = u,
-    omega = omega,
-    dp = dp
-  )
+  q_kumar(p = u, omega = omega, dp = dp)
 }
