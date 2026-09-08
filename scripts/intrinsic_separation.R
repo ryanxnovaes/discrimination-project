@@ -200,3 +200,38 @@ beta_expected_log_kumar <- function(p, mu, phi, rel.tol = 1e-10) {
   # Evaluate the expected Kumaraswamy log-density under Beta truth.
   log(p) + log(q_star) + (p - 1) * elog_x + (q_star - 1) * elog_1m_xp
 }
+
+
+# ============================================================
+# Profiled KL divergence: Beta -> Kumaraswamy
+# ============================================================
+#
+# The Kullback-Leibler divergence from the Beta truth to the
+# Kumaraswamy approximation is
+# D_KL(Beta || Kumaraswamy) = E_Beta[log f_Beta(X)] - E_Beta[log f_K(X)].
+#
+# For each fixed p, the Kumaraswamy parameter q is replaced by
+# its KL-optimal profiled value q*(p). Therefore, the objective
+# function depends only on p:
+# D_KL^profiled(p) = E_Beta[log f_Beta(X)] - E_Beta[log f_K(X | p, q*(p))].
+#
+# The profiled KL objective is evaluated on the log scale:
+# p = exp(log_p).
+# ============================================================
+
+beta_to_kumar_kl_profile <- function(log_p, mu, phi, rel.tol = 1e-10) {
+  
+  p <- exp(log_p)
+  
+  elog_beta <- beta_expected_log_beta(mu = mu, phi = phi)
+  
+  elog_kumar <- beta_expected_log_kumar(p = p, mu = mu, phi = phi, 
+                                        rel.tol = rel.tol)
+  
+  kl <- elog_beta - elog_kumar
+  
+  if (!is.finite(kl))
+    return(.Machine$double.xmax)
+  
+  unname(kl)
+}
