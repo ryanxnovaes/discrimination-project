@@ -92,41 +92,8 @@ fit_beta <- function(x, start_mu = NULL, start_phi = NULL,
 }
 
 
-
 # ============================================================
 # Kumaraswamy maximum likelihood estimation
-# ============================================================
-
-# loglik_kumar <- function(p, q, x) {
-#   
-#   if (any(!is.finite(x)) || any(x <= 0) || any(x >= 1))
-#     stop("All observations must be finite and lie strictly inside (0, 1)")
-#   
-#   if (!is.finite(p) || !is.finite(q) || p <= 0 || q <= 0)
-#     return(-Inf)
-#   
-#   sum(extraDistr::dkumar(x = x, a = p, b = q, log = TRUE))
-# }
-
-# ============================================================
-# Numerically stable log(1 - exp(a)), for a <= 0
-# ============================================================
-
-log1mexp <- function(a) {
-  
-  out <- numeric(length(a))
-  
-  idx <- a < log(0.5)
-  
-  out[idx] <- log1p(-exp(a[idx]))
-  out[!idx] <- log(-expm1(a[!idx]))
-  
-  out
-}
-
-
-# ============================================================
-# Kumaraswamy log-likelihood
 # ============================================================
 
 loglik_kumar <- function(p, q, x) {
