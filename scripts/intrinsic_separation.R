@@ -131,3 +131,52 @@ beta_expected_log_beta <- function(mu, phi) {
   # Combine the three components of the expected Beta log-density.
   -lbeta(alpha, beta) + (alpha - 1) * elog_x + (beta - 1) * elog_1mx
 }
+
+
+# ============================================================
+# Beta -> Kumaraswamy:
+# Profiled Kumaraswamy parameter q
+# ============================================================
+#
+# Model: X ~ Beta(alpha, beta)
+# approximated by a Kumaraswamy distribution with density:
+# f_K(x | p, q) = p q x^(p - 1) (1 - x^p)^(q - 1).
+#
+# For fixed p, the expected Kumaraswamy log-density under
+# Beta truth depends on q through
+# log(q) + (q - 1) E_Beta[log(1 - X^p)].
+#
+# Differentiating the expected log-density with respect to q
+# and setting the derivative equal to zero gives the
+# closed-form profile solution
+#
+#   q*(p) = -1 / E_Beta[log(1 - X^p)].
+#
+# Therefore, q is obtained analytically for each fixed p.
+# This is a profile optimization: rather than optimizing the
+# KL divergence jointly over the two parameters (p, q), the
+# optimal q is first expressed as a function of p.
+#
+# The original two-dimensional optimization is thus reduced
+# to a one-dimensional optimization over p:
+#
+#   (p, q)  -->  q*(p)
+#           -->  D_KL(Beta || Kumaraswamy)
+#           -->  optimize only over p.
+#
+# This avoids a numerical optimization over q and exploits
+# the analytical solution available for fixed p.
+# ============================================================
+
+beta_to_kumar_q_star <- function(p, mu, phi, rel.tol = 1e-10) {
+  
+  elog_1m_xp <- beta_expected_log1m_xp(p = p, mu = mu, phi = phi, 
+                                       rel.tol = rel.tol)
+  
+  q_star <- -1 / elog_1m_xp
+  
+  if (!is.finite(q_star) || q_star <= 0)
+    stop("Invalid profiled Kumaraswamy q")
+  
+  q_star
+}
