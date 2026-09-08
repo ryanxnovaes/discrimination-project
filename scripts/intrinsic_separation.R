@@ -114,7 +114,6 @@ beta_expected_log1m_xp <- function(p, mu, phi, rel.tol = 1e-10) {
 # Expected Beta log-density under Beta truth: E_Beta[log f_Beta(X)]
 # E_Beta[log f_Beta(X)] = -log B(alpha, beta) + (alpha - 1) E_Beta[log(X)]
 #                         + (beta - 1) E_Beta[log(1 - X)]
-
 beta_expected_log_beta <- function(mu, phi) {
   
   pars <- beta_to_ab(mu = mu, phi = phi)
@@ -179,4 +178,25 @@ beta_to_kumar_q_star <- function(p, mu, phi, rel.tol = 1e-10) {
     stop("Invalid profiled Kumaraswamy q")
   
   q_star
+}
+
+
+# Expected Kumaraswamy log-density under Beta truth
+beta_expected_log_kumar <- function(p, mu, phi, rel.tol = 1e-10) {
+  
+  if (!is.finite(p) || p <= 0)
+    return(-Inf)
+  
+  elog_x <- beta_expected_log_x(mu = mu, phi = phi)
+  elog_1m_xp <- beta_expected_log1m_xp(p = p, mu = mu, phi = phi, 
+                                       rel.tol = rel.tol)
+  
+  # For fixed p, obtain the KL-optimal profiled value q*(p).
+  q_star <- -1 / elog_1m_xp
+  
+  if (!is.finite(q_star) || q_star <= 0)
+    return(-Inf)
+  
+  # Evaluate the expected Kumaraswamy log-density under Beta truth.
+  log(p) + log(q_star) + (p - 1) * elog_x + (q_star - 1) * elog_1m_xp
 }
