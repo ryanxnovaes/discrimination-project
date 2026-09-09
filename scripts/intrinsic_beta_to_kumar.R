@@ -61,21 +61,107 @@ beta_expected_log1m_x <- function(mu, phi) {
 # p is the Kumaraswamy shape parameter appearing in log(1 - X^p).
 
 # E_Beta[log(1 - X^p)] = integral_0^1 log(1 - x^p) f_Beta(x) dx.
+
+# beta_expected_log1m_xp <- function(p, mu, phi, rel.tol = 1e-10) {
+#   
+#   if (!is.finite(p) || p <= 0)
+#     stop("p must be positive")
+#   
+#   integrand <- function(x) {
+#     
+#     log_term <- log1mexp(p * log(x))
+#     density <- d_beta(x = x, mu = mu, phi = phi)
+#     
+#     density * log_term
+#   }
+#   
+#   integrate_unit_interval(f = integrand, rel.tol = rel.tol)
+# }
+
+# ============================================================
+# Beta expectation involving the Kumaraswamy shape parameter
+# ============================================================
+#
+# Unlike the previous two expectations, this quantity does not
+# have a simple closed-form expression for general p.
+#
+# E_Beta[log(1 - X^p)] = integral_0^1 log(1 - x^p) f_Beta(x) dx.
+#
+# Direct numerical evaluation of this integral can be unstable
+# when the Beta density is highly concentrated near 0 or 1,
+# because the density may be singular at the boundaries.
+#
+# To improve numerical stability, use the decomposition
+#
+# log(1 - x^p) = log(p) + log(1 - x) + log{(1 - x^p) / [p(1 - x)]}.
+#
+# Therefore,
+#
+# E_Beta[log(1 - X^p)] = log(p) + E_Beta[log(1 - X)] + E_Beta[r_p(X)],
+#
+# where
+#
+# r_p(x) = log{(1 - x^p) / [p(1 - x)]}.
+#
+# The expectation E_Beta[log(1 - X)] is available analytically.
+# Only the bounded remainder r_p(X) is evaluated numerically.
+#
+# For the numerical component, the probability integral
+# transform is used:
+#
+# U ~ Uniform(0, 1),  X = Q_Beta(U),
+#
+# so that
+#
+# E_Beta[r_p(X)] = integral_0^1 r_p(Q_Beta(u)) du.
+#
+# This avoids direct integration against a potentially singular
+# Beta density. The boundary limits of the remainder are finite:
+#
+# r_p(0) = -log(p),    r_p(1) = 0.
+#
+# These limits are explicitly used when the numerical Beta
+# quantile is returned as exactly 0 or 1.
+# ============================================================
+
 beta_expected_log1m_xp <- function(p, mu, phi, rel.tol = 1e-10) {
   
   if (!is.finite(p) || p <= 0)
     stop("p must be positive")
   
-  integrand <- function(x) {
+  # Analytic component: E_Beta[log(1 - X)].
+  elog_1m_x <- beta_expected_log1m_x(mu = mu, phi = phi)
+  
+  # Bounded remainder evaluated on the probability scale.
+  remainder <- function(u) {
     
-    log_term <- log1mexp(p * log(x))
-    density <- d_beta(x = x, mu = mu, phi = phi)
+    x <- q_beta(p = u, mu = mu, phi = phi)
+    out <- numeric(length(x))
     
-    density * log_term
+    at_zero <- x <= 0
+    at_one <- x >= 1
+    interior <- !at_zero & !at_one
+    
+    # Use the analytical boundary limits of r_p(x).
+    out[at_zero] <- -log(p)
+    out[at_one] <- 0
+    
+    if (any(interior)) {
+      
+      log_x <- log(x[interior])
+      
+      out[interior] <- log1mexp(p * log_x) - log1mexp(log_x) - log(p)
+    }
+    
+    out
   }
   
-  integrate_unit_interval(f = integrand, rel.tol = rel.tol)
+  remainder_expectation <- integrate_unit_interval(f = remainder, 
+                                                   rel.tol = rel.tol)
+  
+  log(p) + elog_1m_x + remainder_expectation
 }
+
 
 # Expected Beta log-density under Beta truth: E_Beta[log f_Beta(X)]
 # E_Beta[log f_Beta(X)] = -log B(alpha, beta) + (alpha - 1) E_Beta[log(X)]
@@ -172,17 +258,9 @@ beta_expected_log_kumar <- function(p, mu, phi, rel.tol = 1e-10) {
 # Profiled KL divergence: Beta -> Kumaraswamy
 # ============================================================
 #
-# The Kullback-Leibler divergence from the Beta truth to the
-# Kumaraswamy approximation is
-# D_KL(Beta || Kumaraswamy) = E_Beta[log f_Beta(X)] - E_Beta[log f_K(X)].
-#
-# For each fixed p, the Kumaraswamy parameter q is replaced by
-# its KL-optimal profiled value q*(p). Therefore, the objective
-# function depends only on p:
-# D_KL^profiled(p) = E_Beta[log f_Beta(X)] - E_Beta[log f_K(X | p, q*(p))].
-#
-# The profiled KL objective is evaluated on the log scale:
-# p = exp(log_p).
+# For each p, q is replaced by its analytical profile solution
+# q*(p). The KL divergence therefore becomes a function of p
+# alone and is optimized on the log scale, p = exp(log_p).
 # ============================================================
 
 beta_to_kumar_kl_profile <- function(log_p, mu, phi, rel.tol = 1e-10) {
@@ -206,39 +284,77 @@ beta_to_kumar_kl_profile <- function(log_p, mu, phi, rel.tol = 1e-10) {
 # KL projection: Beta -> Kumaraswamy
 # ============================================================
 #
-# Numerically minimizes the profiled KL objective over log(p)
-# to obtain the KL-optimal Kumaraswamy parameter p*.
+# Compute the KL projection of Beta(mu, phi) onto the
+# Kumaraswamy family.
 #
-# The corresponding q* is then recovered analytically from
-# the profile solution q*(p*), and the optimal parameters are
-# converted from (p*, q*) to the (omega, dp) parameterization.
+# Since q*(p) is available analytically, the projection reduces
+# to one-dimensional optimization over log(p). The initial
+# interval p in [0.01, 100] is only a numerical search region
+# and is expanded whenever the optimum lies near a boundary.
 #
-# Returns the KL-optimal parameters and optimization results.
+# The final interval and number of expansions are returned as
+# numerical diagnostics.
 # ============================================================
 
-project_beta_to_kumar <- function(mu, phi, log_p_interval = c(-8, 8), rel.tol = 1e-10) {
+project_beta_to_kumar <- function(mu, phi, log_p_interval = NULL,
+                                  rel.tol = 1e-10, opt.tol = 1e-12,
+                                  boundary_margin = 0.25, 
+                                  expansion = 2,
+                                  max_expansions = 8) {
   
-  opt <- optimize(
-    f = beta_to_kumar_kl_profile,
-    interval = log_p_interval,
-    mu = mu,
-    phi = phi,
-    rel.tol = rel.tol
-  )
+  # Initial search region on the log(p) scale.
+  if (is.null(log_p_interval)) {
+    log_p_interval <- log(c(0.01, 100))
+  }
   
-  p_star <- unname(exp(opt$minimum))
+  interval <- log_p_interval
   
-  q_star <- beta_to_kumar_q_star(p = p_star, mu = mu, phi = phi,rel.tol = rel.tol)
+  for (i in seq_len(max_expansions)) {
+    
+    opt <- optimize(
+      f = beta_to_kumar_kl_profile,
+      interval = interval,
+      mu = mu,
+      phi = phi,
+      rel.tol = rel.tol,
+      tol = opt.tol
+    )
+    
+    log_p_star <- unname(opt$minimum)
+    
+    near_left <- (log_p_star - interval[1]) < boundary_margin
+    near_right <- (interval[2] - log_p_star) < boundary_margin
+    
+    if (!near_left && !near_right)
+      break
+    
+    if (near_left)
+      interval[1] <- interval[1] - expansion
+    
+    if (near_right)
+      interval[2] <- interval[2] + expansion
+  }
   
+  # Recover the optimal Kumaraswamy shape parameters.
+  p_star <- exp(log_p_star)
+  
+  q_star <- beta_to_kumar_q_star(p = p_star, mu = mu, phi = phi, 
+                                 rel.tol = rel.tol)
+  
+  # Convert the projection to the median-dispersion
+  # parameterization used for reporting.
   pars_k <- kumar_from_pq(p = p_star, q = q_star)
   
   list(
-    p = p_star,
-    q = q_star,
+    p = unname(p_star),
+    q = unname(q_star),
     omega = unname(pars_k["omega"]),
     dp = unname(pars_k["dp"]),
     D_star = unname(opt$objective),
-    log_p = unname(opt$minimum),
+    log_p = unname(log_p_star),
+    search_interval = unname(interval),
+    expansions = i - 1L,
+    boundary_hit = near_left || near_right,
     optim = opt
   )
 }
