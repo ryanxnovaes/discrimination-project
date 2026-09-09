@@ -3,41 +3,7 @@
 # ============================================================
 
 source("scripts/distributions.R")
-source("scripts/estimation.R")
-
-# ============================================================
-# Numerical integration on (0, 1)
-# ============================================================
-
-# Splits (0, 1) into two subintervals to improve numerical
-# stability near the boundaries. The subdivisions argument
-# controls the maximum number of adaptive subdivisions used
-# by integrate().
-
-integrate_unit_interval <- function(f, rel.tol = 1e-10, subdivisions = 2000L) {
-  
-  # Integrate over the lower half of the unit interval.
-  left <- integrate(
-    f = f,
-    lower = 0,
-    upper = 0.5,
-    rel.tol = rel.tol,
-    subdivisions = subdivisions
-  )
-  
-  # Integrate over the upper half of the unit interval.
-  right <- integrate(
-    f = f,
-    lower = 0.5,
-    upper = 1,
-    rel.tol = rel.tol,
-    subdivisions = subdivisions
-  )
-  
-  # Combine both halves to obtain the integral over (0,1).
-  left$value + right$value
-}
-
+source("scripts/intrinsic_common.R")
 
 # ============================================================
 # Beta truth: expected log terms
@@ -234,4 +200,45 @@ beta_to_kumar_kl_profile <- function(log_p, mu, phi, rel.tol = 1e-10) {
     return(.Machine$double.xmax)
   
   unname(kl)
+}
+
+# ============================================================
+# KL projection: Beta -> Kumaraswamy
+# ============================================================
+#
+# Numerically minimizes the profiled KL objective over log(p)
+# to obtain the KL-optimal Kumaraswamy parameter p*.
+#
+# The corresponding q* is then recovered analytically from
+# the profile solution q*(p*), and the optimal parameters are
+# converted from (p*, q*) to the (omega, dp) parameterization.
+#
+# Returns the KL-optimal parameters and optimization results.
+# ============================================================
+
+project_beta_to_kumar <- function(mu, phi, log_p_interval = c(-8, 8), rel.tol = 1e-10) {
+  
+  opt <- optimize(
+    f = beta_to_kumar_kl_profile,
+    interval = log_p_interval,
+    mu = mu,
+    phi = phi,
+    rel.tol = rel.tol
+  )
+  
+  p_star <- unname(exp(opt$minimum))
+  
+  q_star <- beta_to_kumar_q_star(p = p_star, mu = mu, phi = phi,rel.tol = rel.tol)
+  
+  pars_k <- kumar_from_pq(p = p_star, q = q_star)
+  
+  list(
+    p = p_star,
+    q = q_star,
+    omega = unname(pars_k["omega"]),
+    dp = unname(pars_k["dp"]),
+    D_star = unname(opt$objective),
+    log_p = unname(opt$minimum),
+    optim = opt
+  )
 }
