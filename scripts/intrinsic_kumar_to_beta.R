@@ -274,3 +274,112 @@ solve_kumar_to_beta <- function(omega, dp, tol = 1e-12, maxit = 100, rel.tol = 1
     log_ab = unname(log_ab)
   )
 }
+
+# ============================================================
+# KL projection: Kumaraswamy -> Beta
+# ============================================================
+
+# Compute the Beta KL projection under Kumaraswamy truth.
+# This function provides the projection interface to the Newton
+# solver and returns the Beta parameters (alpha*, beta*) satisfying
+# the expected score equations.
+
+project_kumar_to_beta <- function(omega, dp, rel.tol = 1e-10,
+                                  tol = 1e-12, maxit = 100) {
+  
+  solve_kumar_to_beta(
+    omega = omega,
+    dp = dp,
+    tol = tol,
+    maxit = maxit,
+    rel.tol = rel.tol
+  )
+}
+
+# ============================================================
+# Expected Kumaraswamy log-density under Kumaraswamy truth
+# ============================================================
+# 
+# Compute the expected log-density of the true Kumaraswamy model:
+# E_K[log f_K(X)].
+# Both logarithmic expectations have closed-form expressions:
+#
+# E_K[log(X)] = [psi(1) - psi(q + 1)] / p
+# E_K[log(1 - X^p)] = -1 / q.
+#
+# This quantity is evaluated analytically using the closed-form
+# expectations of log(X) and log(1 - X^p).
+kumar_expected_log_kumar <- function(omega, dp, rel.tol = 1e-10) {
+  
+  pars <- kumar_to_pq(omega = omega, dp = dp)
+  
+  p <- pars["p"]
+  q <- pars["q"]
+  
+  elog_x <- (digamma(1) - digamma(q + 1)) / p
+  elog_1m_xp <- -1 / q
+  
+  log(p) + log(q) + (p - 1) * elog_x + (q - 1) * elog_1m_xp
+}
+
+
+# ============================================================
+# Expected Beta log-density under Kumaraswamy truth
+# ============================================================
+# 
+# Compute the expected log-density of a Beta(alpha, beta) model
+# under Kumaraswamy truth:
+#
+# E_K[log f_B(X; alpha, beta)].
+#
+# When evaluated at the projected parameters (alpha*, beta*),
+# this gives the expected log-density of the KL-optimal Beta
+# approximation to the Kumaraswamy distribution.
+kumar_expected_log_beta <- function(alpha, beta, omega, dp, rel.tol = 1e-10) {
+  
+  elog_x <- kumar_expected_log_x(omega = omega, dp = dp)
+  elog_1mx <- kumar_expected_log1m_x(omega = omega, dp = dp, rel.tol = rel.tol)
+  
+  -lbeta(alpha, beta) + (alpha - 1) * elog_x + (beta - 1) * elog_1mx
+}
+
+
+# ============================================================
+# Full KL projection: Kumaraswamy -> Beta
+# ============================================================
+# 
+# Compute the full KL projection from Kumaraswamy to Beta.
+#
+# First obtain the KL-optimal Beta parameters (alpha*, beta*)
+# from the expected score equations. The intrinsic divergence is
+# then evaluated as
+#
+# D*_(K -> B) = E_K[log f_K(X)] - E_K[log f_B(X; alpha*, beta*)].
+#
+# The returned D_star therefore measures the intrinsic separation
+# from the Kumaraswamy truth to its KL-optimal Beta approximation.
+project_kumar_to_beta_kl <- function(omega, dp, rel.tol = 1e-10, 
+                                     tol = 1e-12, maxit = 100) {
+  
+  proj <- project_kumar_to_beta(
+    omega = omega,
+    dp = dp,
+    rel.tol = rel.tol,
+    tol = tol,
+    maxit = maxit
+  )
+  
+  elog_kumar <- kumar_expected_log_kumar(omega = omega, dp = dp, rel.tol = rel.tol)
+  
+  elog_beta <- kumar_expected_log_beta(
+    alpha = proj$alpha,
+    beta = proj$beta,
+    omega = omega,
+    dp = dp,
+    rel.tol = rel.tol
+  )
+  
+  D_star <- unname(elog_kumar - elog_beta)
+  
+  c(proj,list(D_star = D_star))
+}
