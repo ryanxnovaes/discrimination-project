@@ -70,6 +70,36 @@ hellinger_distance <- function(log_d_true, log_d_comp, rel.tol = 1e-10) {
   sqrt(h2)
 }
 
-# - hellinger_distance
-# - overlap_coefficient
-# - loglik_ratio_variance
+
+# ============================================================
+# Overlap coefficient
+# ============================================================
+# 
+# Compute the overlap coefficient between two densities on (0, 1).
+#
+# OVL(f, g) = integral_0^1 min{f(x), g(x)} dx.
+#
+# The densities are supplied on the log scale. The integrand is
+# therefore evaluated as exp(min(log f(x), log g(x))).
+overlap_coefficient <- function(log_d_true, log_d_comp, rel.tol = 1e-10) {
+  
+  integrand <- function(x) {
+    
+    log_f <- log_d_true(x)
+    log_g <- log_d_comp(x)
+    
+    exp(pmin(log_f, log_g))
+  }
+  
+  # Compute the overlap by numerical integration.
+  ovl <- integrate_unit_interval(f = integrand, rel.tol = rel.tol)
+  
+  # Correct small numerical violations of the theoretical upper bound.
+  if (ovl > 1 && ovl - 1 < 1e-8)
+    ovl <- 1
+  
+  if (ovl < 0 || ovl > 1 + 1e-8)
+    warning("Invalid overlap coefficient")
+  
+  ovl
+}
