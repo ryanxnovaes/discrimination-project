@@ -383,3 +383,109 @@ project_kumar_to_beta_kl <- function(omega, dp, rel.tol = 1e-10,
   
   c(proj,list(D_star = D_star))
 }
+
+
+# ============================================================
+# Complete intrinsic separation: Kumaraswamy -> Beta
+# ============================================================
+#
+# Compute the separation between a Kumaraswamy distribution
+# and its KL-optimal Beta projection.
+#
+# The function combines the KL divergence, Hellinger distance,
+# overlap coefficient, log-likelihood-ratio variance, and the
+# standardized separation delta = D_star / sqrt(v).
+# ============================================================
+intrinsic_kumar_to_beta <- function(omega, dp, rel.tol = 1e-10, tol = 1e-12,
+                                    maxit = 100, zero.tol = 1e-10) {
+  
+  # Obtain the KL-optimal Beta projection.
+  proj <- project_kumar_to_beta_kl(
+    omega = omega,
+    dp = dp,
+    rel.tol = rel.tol,
+    tol = tol,
+    maxit = maxit
+  )
+  
+  # Define the true Kumaraswamy density and its log-density.
+  d_true <- function(x) {
+    
+    d_kumar(x = x, omega = omega, dp = dp)
+  }
+  
+  log_d_true <- function(x) {
+    
+    d_kumar(x = x, omega = omega, dp = dp, log = TRUE)
+  }
+  
+  # Define the projected Beta density and its log-density.
+  d_comp <- function(x) {
+    
+    d_beta(x = x, mu = proj$mu, phi = proj$phi)
+  }
+  
+  log_d_comp <- function(x) {
+    
+    d_beta(x = x, mu = proj$mu, phi = proj$phi, log = TRUE)
+  }
+  
+  # Compute the Hellinger distance between the true and projected densities.
+  H_star <- hellinger_distance(log_d_true = log_d_true, log_d_comp = log_d_comp,
+                               rel.tol = rel.tol
+  )
+  
+  # Compute the overlap coefficient between the true and projected densities.
+  OVL_star <- overlap_coefficient(log_d_true = log_d_true, log_d_comp = log_d_comp,
+                                  rel.tol = rel.tol
+  )
+  
+  # KL divergence at the optimal Beta projection.
+  D_star <- unname(proj$D_star)
+  
+  # Variance of the log-likelihood ratio under the Kumaraswamy truth.
+  v <- loglik_ratio_variance(
+    d_true = d_true,
+    log_d_true = log_d_true,
+    log_d_comp = log_d_comp,
+    D_star = D_star,
+    rel.tol = rel.tol,
+    zero.tol = zero.tol
+  )
+  
+  # Treat sufficiently small numerical values as zero.
+  if (is.finite(D_star) && abs(D_star) < zero.tol) {
+    D_star <- 0
+  }
+  
+  if (is.finite(v) && abs(v) < zero.tol) {
+    v <- 0
+  }
+  
+  # Standardized separation based on the KL divergence and
+  # the variance of the log-likelihood ratio.
+  delta <- if (is.finite(D_star) && is.finite(v) && D_star > zero.tol && v > zero.tol) {
+    D_star / sqrt(v)
+  } else {
+    NA_real_
+  }
+  
+  # Return the projection parameters and all separation measures.
+  list(
+    truth = "Kumaraswamy",
+    omega = unname(omega),
+    dp = unname(dp),
+    alpha_star = unname(proj$alpha),
+    beta_star = unname(proj$beta),
+    mu_star = unname(proj$mu),
+    phi_star = unname(proj$phi),
+    D_star = unname(D_star),
+    H_star = unname(H_star),
+    OVL_star = unname(OVL_star),
+    v = unname(v),
+    delta = unname(delta),
+    score_norm = unname(proj$score_norm),
+    iterations = unname(proj$iterations),
+    convergence = unname(proj$convergence)
+  )
+}
