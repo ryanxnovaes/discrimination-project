@@ -103,3 +103,53 @@ overlap_coefficient <- function(log_d_true, log_d_comp, rel.tol = 1e-10) {
   
   ovl
 }
+
+
+# ============================================================
+# Variance of the log-likelihood ratio
+# ============================================================
+# 
+# Compute the variance of the log-likelihood ratio under the
+# true distribution.
+#
+# Let
+# Z(X) = log f(X) - log g(X) = log{f(X) / g(X)}.
+# D_KL(f || g) = E_f[Z(X)] = D_star,
+#
+# Under the true density f,
+# E_f[Z(X)] = D_KL(f || g) = D_star.
+#
+# Therefore, the variance of the log-likelihood ratio is
+# V = Var_f[Z(X)] = E_f[(Z(X) - D_star)^2]
+#                 = E_f[{log f(X) - log g(X) - D_KL(f || g)}^2].
+#
+# This quantity measures the variability of the pointwise
+# log-likelihood ratio around its expected value under the
+# true distribution.
+loglik_ratio_variance <- function(d_true, log_d_true, log_d_comp, D_star,
+                                  rel.tol = 1e-10, zero.tol = 1e-10) {
+  
+  integrand <- function(x) {
+    
+    density <- d_true(x)
+    z <- log_d_true(x) - log_d_comp(x)
+
+    density * (z - D_star)^2
+  }
+  
+  # Compute the variance by numerical integration.
+  v <- integrate_unit_interval(f = integrand, rel.tol = rel.tol)
+  v <- unname(v)
+  
+  # Treat small numerical values as zero.
+  if (is.finite(v) && abs(v) < zero.tol) {
+    v <- 0
+  }
+  
+  # A negative variance can only arise from numerical error.
+  if (is.finite(v) && v < -zero.tol) {
+    warning("Computed log-likelihood-ratio variance is negative")
+  }
+  
+  v
+}
