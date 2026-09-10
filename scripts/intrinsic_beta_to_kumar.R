@@ -358,3 +358,106 @@ project_beta_to_kumar <- function(mu, phi, log_p_interval = NULL,
     optim = opt
   )
 }
+
+
+# ============================================================
+# Complete intrinsic separation: Beta -> Kumaraswamy
+# ============================================================
+#
+# Compute the separation between a Beta distribution and its
+# KL-optimal Kumaraswamy projection.
+#
+# The function combines the KL divergence, Hellinger distance,
+# overlap coefficient, log-likelihood-ratio variance, and the
+# standardized separation delta = D_star / sqrt(v).
+# ============================================================
+intrinsic_beta_to_kumar <- function(mu, phi, log_p_interval = NULL,
+                                    rel.tol = 1e-10, zero.tol = 1e-10) {
+  
+  # Obtain the KL-optimal Kumaraswamy projection.
+  proj <- project_beta_to_kumar(
+    mu = mu,
+    phi = phi,
+    log_p_interval = log_p_interval,
+    rel.tol = rel.tol
+  )
+  
+  # Define the true Beta density and its log-density.
+  d_true <- function(x) {
+  
+    d_beta(x = x, mu = mu, phi = phi)
+  }
+  
+  log_d_true <- function(x) {
+    
+    d_beta(x = x, mu = mu, phi = phi, log = TRUE)
+  }
+  
+  # Define the projected Kumaraswamy density and its log-density.
+  d_comp <- function(x) {
+    
+    d_kumar(x = x, omega = proj$omega, dp = proj$dp
+    )
+  }
+  
+  log_d_comp <- function(x) {
+    
+    d_kumar(x = x, omega = proj$omega, dp = proj$dp, log = TRUE)
+  }
+  
+  # Compute the Hellinger distance between the true and projected densities.
+  H_star <- hellinger_distance(log_d_true = log_d_true, log_d_comp = log_d_comp,
+                               rel.tol = rel.tol
+  )
+  
+  # Compute the overlap coefficient between the true and projected densities.
+  OVL_star <- overlap_coefficient(log_d_true = log_d_true, log_d_comp = log_d_comp,
+                                  rel.tol = rel.tol
+  )
+  
+  # KL divergence at the optimal Kumaraswamy projection.
+  D_star <- unname(proj$D_star)
+  
+  # Variance of the log-likelihood ratio under the Beta truth.
+  v <- loglik_ratio_variance(
+    d_true = d_true,
+    log_d_true = log_d_true,
+    log_d_comp = log_d_comp,
+    D_star = D_star,
+    rel.tol = rel.tol,
+    zero.tol = zero.tol
+  )
+  
+  # Treat sufficiently small numerical values as zero.
+  if (is.finite(D_star) && abs(D_star) < zero.tol) {
+    D_star <- 0
+  }
+  
+  if (is.finite(v) && abs(v) < zero.tol) {
+    v <- 0
+  }
+  
+  # Standardized separation based on the KL divergence and
+  # the variance of the log-likelihood ratio.
+  delta <- if (is.finite(D_star) && is.finite(v) && D_star > zero.tol && v > zero.tol) {
+    D_star / sqrt(v)
+  } else {
+    NA_real_
+  }
+  
+  # Return the projection parameters and all separation measures.
+  list(
+    truth = "Beta",
+    mu = unname(mu),
+    phi = unname(phi),
+    p_star = unname(proj$p),
+    q_star = unname(proj$q),
+    omega_star = unname(proj$omega),
+    dp_star = unname(proj$dp),
+    D_star = unname(D_star),
+    H_star = unname(H_star),
+    OVL_star = unname(OVL_star),
+    v = unname(v),
+    delta = unname(delta)
+  )
+}
