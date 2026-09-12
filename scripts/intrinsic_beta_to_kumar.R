@@ -56,28 +56,6 @@ beta_expected_log1m_x <- function(mu, phi) {
 }
 
 
-# Unlike the previous two expectations, this quantity is
-# evaluated numerically over the unit interval. The parameter
-# p is the Kumaraswamy shape parameter appearing in log(1 - X^p).
-
-# E_Beta[log(1 - X^p)] = integral_0^1 log(1 - x^p) f_Beta(x) dx.
-
-# beta_expected_log1m_xp <- function(p, mu, phi, rel.tol = 1e-10) {
-#   
-#   if (!is.finite(p) || p <= 0)
-#     stop("p must be positive")
-#   
-#   integrand <- function(x) {
-#     
-#     log_term <- log1mexp(p * log(x))
-#     density <- d_beta(x = x, mu = mu, phi = phi)
-#     
-#     density * log_term
-#   }
-#   
-#   integrate_unit_interval(f = integrand, rel.tol = rel.tol)
-# }
-
 # ============================================================
 # Beta expectation involving the Kumaraswamy shape parameter
 # ============================================================
@@ -298,18 +276,20 @@ beta_to_kumar_kl_profile <- function(log_p, mu, phi, rel.tol = 1e-10) {
 
 project_beta_to_kumar <- function(mu, phi, log_p_interval = NULL,
                                   rel.tol = 1e-10, opt.tol = 1e-12,
-                                  boundary_margin = 0.25, 
+                                  boundary_margin = 0.25,
                                   expansion = 2,
                                   max_expansions = 8) {
   
-  # Initial search region on the log(p) scale.
+  # Initial search interval on the log(p) scale
   if (is.null(log_p_interval)) {
     log_p_interval <- log(c(0.01, 100))
   }
   
   interval <- log_p_interval
   
-  for (i in seq_len(max_expansions)) {
+  expansions <- 0L
+  
+  repeat {
     
     opt <- optimize(
       f = beta_to_kumar_kl_profile,
@@ -322,10 +302,15 @@ project_beta_to_kumar <- function(mu, phi, log_p_interval = NULL,
     
     log_p_star <- unname(opt$minimum)
     
+    # Check whether optimum is close to a boundary
     near_left <- (log_p_star - interval[1]) < boundary_margin
     near_right <- (interval[2] - log_p_star) < boundary_margin
     
+    
     if (!near_left && !near_right)
+      break
+    
+    if (expansions >= max_expansions)
       break
     
     if (near_left)
@@ -333,12 +318,13 @@ project_beta_to_kumar <- function(mu, phi, log_p_interval = NULL,
     
     if (near_right)
       interval[2] <- interval[2] + expansion
+    
+    expansions <- expansions + 1L
   }
   
   # Recover the optimal Kumaraswamy shape parameters.
   p_star <- exp(log_p_star)
-  
-  q_star <- beta_to_kumar_q_star(p = p_star, mu = mu, phi = phi, 
+  q_star <- beta_to_kumar_q_star(p = p_star, mu = mu, phi = phi,
                                  rel.tol = rel.tol)
   
   # Convert the projection to the median-dispersion
@@ -353,7 +339,7 @@ project_beta_to_kumar <- function(mu, phi, log_p_interval = NULL,
     D_star = unname(opt$objective),
     log_p = unname(log_p_star),
     search_interval = unname(interval),
-    expansions = i - 1L,
+    expansions = expansions,
     boundary_hit = near_left || near_right,
     optim = opt
   )

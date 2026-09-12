@@ -1,4 +1,4 @@
-source("scripts//distributions.R")
+source("scripts/distributions.R")
 
 # ============================================================
 # Beta maximum likelihood estimation
@@ -25,7 +25,6 @@ fit_beta <- function(x, start_mu = NULL, start_phi = NULL,
   if (!is.finite(start_mu) || start_mu <= 0 || start_mu >= 1)
     stop("Invalid starting value for mu")
   
-  
   if (is.null(start_phi)) {
     
     # alpha = mu * phi and beta = (1 - mu) * phi
@@ -39,11 +38,17 @@ fit_beta <- function(x, start_mu = NULL, start_phi = NULL,
     #
     # phi = mu * (1 - mu) / Var(X) - 1
     
-    start_phi <- start_mu * (1 - start_mu) / stats::var(x) - 1
+    phi_mm_value <- start_mu * (1 - start_mu) / stats::var(x) - 1
+    
+    if (is.finite(phi_mm_value) && phi_mm_value > 0) {
+      
+      start_phi <- phi_mm_value
+      
+    } else {
+      
+      start_phi <- 1
+    }
   }
-  
-  if (!is.finite(start_phi) || start_phi <= 0)
-    stop("Invalid method-of-moments starting value for phi")
   
   
   # ----------------------------------------------------------
@@ -129,8 +134,8 @@ kumar_start_pq <- function(x) {
     p <- exp(par[1])
     q <- exp(par[2])
     
-    mu <- q * beta(1 + 1/p, q)
-    mu2 <- q * beta(1 + 2/p, q)
+    mu <- exp(log(q) + lbeta(1 + 1 / p, q))
+    mu2 <- exp(log(q) + lbeta(1 + 2 / p, q))
     
     (mu - m)^2 + (mu2 - mu^2 - v)^2
   }

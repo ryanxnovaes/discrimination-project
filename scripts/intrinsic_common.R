@@ -1,5 +1,3 @@
-source("scripts/distributions.R")
-
 # ============================================================
 # Numerical integration on (0, 1)
 # ============================================================
@@ -114,7 +112,6 @@ overlap_coefficient <- function(log_d_true, log_d_comp, rel.tol = 1e-10) {
 #
 # Let
 # Z(X) = log f(X) - log g(X) = log{f(X) / g(X)}.
-# D_KL(f || g) = E_f[Z(X)] = D_star,
 #
 # Under the true density f,
 # E_f[Z(X)] = D_KL(f || g) = D_star.
@@ -148,7 +145,7 @@ loglik_ratio_variance <- function(d_true, log_d_true, log_d_comp, D_star,
   
   # A negative variance can only arise from numerical error.
   if (is.finite(v) && v < -zero.tol) {
-    warning("Computed log-likelihood-ratio variance is negative")
+    stop("Computed log-likelihood-ratio variance is negative")
   }
   
   v

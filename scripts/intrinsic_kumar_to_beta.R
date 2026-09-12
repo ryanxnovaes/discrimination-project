@@ -40,16 +40,76 @@ kumar_expected_log_x <- function(omega, dp) {
 
 
 # E_K[log(1 - X)] = integral_0^1 log(1 - x) f_K(x) dx.
+# kumar_expected_log1m_x <- function(omega, dp, rel.tol = 1e-10) {
+#   
+#   integrand <- function(x) {
+#     
+#     density <- d_kumar(x = x, omega = omega, dp = dp)
+#     
+#     density * log1p(-x)
+#   }
+#   
+#   integrate_unit_interval(f = integrand, rel.tol = rel.tol)
+# }
+
+# E_K[log(1 - X)] is evaluated using a decomposition that
+# separates the analytically available boundary-singular term
+# from a bounded remainder.
+#
+# Define
+# r_p(x) = log{(1 - x^p) / [p(1 - x)]}.
+#
+# Then
+# log(1 - x) = log(1 - x^p) - log(p) - r_p(x).
+#
+# Under Kumaraswamy(p, q) truth,
+# E_K[log(1 - X^p)] = -1 / q.
+#
+# Therefore,
+# E_K[log(1 - X)] = -1/q - log(p) - E_K[r_p(X)].
+#
+# Only the bounded remainder is evaluated numerically. The
+# expectation is computed on the quantile scale, X = Q_K(U),
+# with U ~ Uniform(0, 1), avoiding direct integration against
+# the Kumaraswamy density near the boundaries.
 kumar_expected_log1m_x <- function(omega, dp, rel.tol = 1e-10) {
   
-  integrand <- function(x) {
+  pars <- kumar_to_pq(omega = omega, dp = dp)
+  
+  p <- pars["p"]
+  q <- pars["q"]
+  
+  remainder <- function(u) {
     
-    density <- d_kumar(x = x, omega = omega, dp = dp)
+    x <- q_kumar(p = u, omega = omega, dp = dp)
     
-    density * log1p(-x)
+    out <- numeric(length(x))
+    
+    at_zero <- x <= 0
+    at_one  <- x >= 1
+    interior <- !at_zero & !at_one
+    
+    # Boundary limits of
+    # r_p(x) = log{(1 - x^p) / [p(1 - x)]}.
+    out[at_zero] <- -log(p)
+    out[at_one]  <- 0
+    
+    if (any(interior)) {
+      
+      log_x <- log(x[interior])
+      
+      out[interior] <- log1mexp(p * log_x) - log1mexp(log_x) - log(p)
+    }
+    
+    out
   }
   
-  integrate_unit_interval(f = integrand, rel.tol = rel.tol)
+  remainder_expectation <- integrate_unit_interval(
+    f = remainder,
+    rel.tol = rel.tol
+  )
+  
+  -1 / q - log(p) - remainder_expectation
 }
 
 
@@ -309,7 +369,7 @@ project_kumar_to_beta <- function(omega, dp, rel.tol = 1e-10,
 #
 # This quantity is evaluated analytically using the closed-form
 # expectations of log(X) and log(1 - X^p).
-kumar_expected_log_kumar <- function(omega, dp, rel.tol = 1e-10) {
+kumar_expected_log_kumar <- function(omega, dp) {
   
   pars <- kumar_to_pq(omega = omega, dp = dp)
   
@@ -369,7 +429,11 @@ project_kumar_to_beta_kl <- function(omega, dp, rel.tol = 1e-10,
     maxit = maxit
   )
   
-  elog_kumar <- kumar_expected_log_kumar(omega = omega, dp = dp, rel.tol = rel.tol)
+  if (proj$convergence != 0L) {
+    stop("Kumaraswamy-to-Beta KL projection did not converge")
+  }
+  
+  elog_kumar <- kumar_expected_log_kumar(omega = omega, dp = dp)
   
   elog_beta <- kumar_expected_log_beta(
     alpha = proj$alpha,
